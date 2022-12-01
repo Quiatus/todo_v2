@@ -31,6 +31,12 @@ const item3 = new Item({
 
 const defaultItems = [item1, item2, item3];
 
+const listSchema = {
+    name: String,
+    items: [itemsSchema]
+}
+
+const List = mongoose.model('List', listSchema);
 
 app.get("/", function(req,res){
     let day = date.getDate();
@@ -47,30 +53,81 @@ app.get("/", function(req,res){
             });
             res.redirect('/');
         } else {
-            res.render('list',{listTitle: day, newListItem: foundItems});
+            res.render('list',{listTitle: 'Today', newListItem: foundItems});
         }
     })
 });
 
-app.get("/work", function(req,res){
-    res.render('list',{listTitle: 'Work List', newListItem: workItems});
-});
+// app.get("/work", function(req,res){
+//     res.render('list',{listTitle: 'Work List', newListItem: workItems});
+// });
+
+app.get('/:customListName', function(req,res){
+    const customListName = req.params.customListName;
+
+    List.findOne({name: customListName}, function(err, foundList){
+        if (!err){
+            if (!foundList){
+                // create new list
+                const list = new List({
+                    name: customListName,
+                    items: defaultItems
+                });
+
+                list.save();
+                res.redirect('/' + customListName)
+            } else {
+                res.render('list',{listTitle: foundList.name, newListItem: foundList.items})
+            }
+        }
+    })
+})
 
 app.get('/about',function(req,res){
     res.render('about');
 })
 
 app.post('/', function(req,res){
-    let item = req.body.addItem;
+    
+    const itemName = req.body.addItem;
+    const listName = req.body.list;
+    
+    const item = new Item({
+        name: itemName
+    });
 
-    if (req.body.list === 'Work List') {
-        workItems.push(item);
-        res.redirect('/work');
-    } else {
-        items.push(item);
+    if (listName === 'Today'){
+        item.save();
         res.redirect('/');
+    } else {
+        List.findOne({name: listName}, function(err, foundList){
+            foundList.items.push(item);
+            foundList.save();
+            res.redirect('/' + listName);
+        })
     }
+
 })
+
+app.post('/delete', function(req, res){
+    const checkedItemId = req.body.checkBox;
+    const listName = req.body.listName;
+
+    if(listName === 'Today'){
+        Item.findByIdAndRemove(checkedItemId, function(err){
+            if (!err){
+                console.log('Item deleted!');
+                res.redirect('/');
+            }
+        })
+    } else {
+        List.findOneAndUpdate({name: listName},{$pull: {items: {_id: checkedItemId}}}, function(err, foundList){
+            if(!err){
+                res.redirect('/' + listName)
+            }
+        })
+    }
+});
 
 app.listen(3000, function(){
     console.log('Server started on port 3000');
